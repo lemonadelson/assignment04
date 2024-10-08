@@ -1,6 +1,29 @@
 ---
 title: "index"
 format: html
+embed-resources: true
 ---
 
+# Data Science: Assignment 04
+### Madeleine Adelson
 
+## The data set
+
+The following visualizations are created using [New York City's Property Valuation and Assessment Data set](https://data.cityofnewyork.us/City-Government/Property-Valuation-and-Assessment-Data/yjxr-fw8i/about_data). Housing affordability is one of my primary policy interests, and the valuation of property has an impact on both on mortgages paid by homeowners as well as rents paid to landlords. I wanted to investigate trends in housing valuations in New York City as a way of better understanding how values vary across the city, across different housing types, and over time.
+
+As a first step, I imported my data. I then filtered it: the original data file is very large and includes records for all types of properties, not just residential ones. I removed non-residential properties, selected only the columns I was interested in, and removed some rows with missing data.
+
+```{r}
+#| output: false
+
+library(tidyverse)
+res_data <- read_csv("/Users/madeleineadelson/IDrive Downloads/MadeleinesMacBookAir/Users/madels01/Documents/Coursework/Georgetown/2024 Fall/Data Science/assignment04/data/Property_Valuation_and_Assessment_Data.csv", lazy = TRUE) |>
+  filter(TAXCLASS %in% c("1","2","2A"),
+         FULLVAL > 0,
+         OWNER != "NA",
+         BLDGCL != "G0",
+         BLDGCL != "Z0") |>
+  select(BBLE, BORO, BLOCK, LOT, OWNER, BLDGCL, TAXCLASS, STORIES, FULLVAL, AVTOT, STADDR, POSTCODE, YEAR)
+
+
+```
