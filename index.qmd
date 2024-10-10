@@ -1,5 +1,6 @@
 ---
 title: "index"
+author: "Madeleine Adelson"
 format: html
 embed-resources: true
 ---
@@ -11,19 +12,71 @@ embed-resources: true
 
 The following visualizations are created using [New York City's Property Valuation and Assessment Data set](https://data.cityofnewyork.us/City-Government/Property-Valuation-and-Assessment-Data/yjxr-fw8i/about_data). Housing affordability is one of my primary policy interests, and the valuation of property has an impact on both on mortgages paid by homeowners as well as rents paid to landlords. I wanted to investigate trends in housing valuations in New York City as a way of better understanding how values vary across the city, across different housing types, and over time.
 
-As a first step, I imported my data. I then filtered it: the original data file is very large and includes records for all types of properties, not just residential ones. I removed non-residential properties, selected only the columns I was interested in, and removed some rows with missing data.
+As a first step, I imported my data. I then filtered it: the original data file is extremely large and includes records for all types of properties, not just residential ones. I removed non-residential properties, vacant lots, and properties owned by the New York Housing Authority or the City of New York - while these represent important housing stock, they may not follow market price/value trends in the same way as privately-owned property. I selected only the columns I was interested in, kept only the most recent 5 years, and removed some rows with missing data.
 
+I also created two columns: one that converts the original column YEAR to a standard year 
+(original format is "2018/19"; I kept the first year in the range for each); and one that includes the names of the boroughs instead of just number codes (1-5).
 ```{r}
 #| output: false
 
 library(tidyverse)
+library(ggplot2)
+library(scales)
+
 res_data <- read_csv("/Users/madeleineadelson/IDrive Downloads/MadeleinesMacBookAir/Users/madels01/Documents/Coursework/Georgetown/2024 Fall/Data Science/assignment04/data/Property_Valuation_and_Assessment_Data.csv", lazy = TRUE) |>
-  filter(TAXCLASS %in% c("1","2","2A"),
+  filter(TAXCLASS %in% c("1","1A","1B","1C","1D","2","2A","2B","2C"),
+         YEAR %in% c("2014/15", "2015/16", "2016/17", "2017/18", "2018/19"),
          FULLVAL > 0,
          OWNER != "NA",
+         OWNER != "NEW YORK CITY HOUSING",
+         OWNER != "NYC HOUSING AUTHORITY",
+         OWNER != "NYC HOSUING AUTHORITY",
+         OWNER != "CITY OF NEW YORK",
          BLDGCL != "G0",
-         BLDGCL != "Z0") |>
-  select(BBLE, BORO, BLOCK, LOT, OWNER, BLDGCL, TAXCLASS, STORIES, FULLVAL, AVTOT, STADDR, POSTCODE, YEAR)
+         BLDGCL != "V0",
+         BLDGCL != "V3",
+         BLDGCL != "Z0"
+         ) |>
+  select(BBLE, BORO, BLOCK, LOT, OWNER, BLDGCL, TAXCLASS, STORIES, FULLVAL, AVTOT, STADDR, POSTCODE, YEAR, Latitude, Longitude) |>
+  mutate(yearcln = case_when(
+    YEAR == "2014/15" ~ 2014,
+    YEAR == "2015/16" ~ 2015,
+    YEAR == "2016/17" ~ 2016,
+    YEAR == "2017/18" ~ 2017,
+    YEAR == "2018/19" ~ 2018),
+    boro_name = case_when(
+    BORO == 1 ~ "Manhattan",
+    BORO == 2 ~ "Bronx",
+    BORO == 3 ~ "Brooklyn",
+    BORO == 4 ~ "Queens",
+    BORO == 5 ~ "Staten Island")
+    )
+  
 
+```
+
+## First visualization: How have property values changed over time in each borough?
+
+The chart below gives a sense of the relative market value of apartments in each borough and how those values changed from 2014-2018. I restricted this analysis to buildings classed as apartment buildings (4+ units); there seem to be some issues with comparing property values across different property types such as single-family homes.
+
+Median market values have increased in all boroughs. Values are highest - and rising fastest, in terms of dollars - in Manhattan and Brooklyn.
+
+```{r}
+
+res_data |>
+  filter(TAXCLASS %in% c("2", "2A", "2B", "2C")) |>
+  group_by(yearcln, boro_name) |>
+  summarize(
+    medval = median(FULLVAL)
+  ) |>
+  ggplot() +
+  geom_line(mapping = aes(x = yearcln, y = medval, color = boro_name)) +
+  labs(title = "Median market value of New York City apartments",
+       subtitle = "2014 through 2018, by borough",
+       color = "Borough") +
+  xlab("Year") +
+  ylab("Median property value") +
+  scale_y_continuous(labels = label_dollar()) +
+  theme_minimal()
 
 ```
