@@ -6,6 +6,7 @@ embed-resources: true
 ---
 
 # Data Science: Assignment 04
+
 ### Madeleine Adelson
 
 ## The data set
@@ -14,8 +15,8 @@ The following visualizations are created using [New York City's Property Valuati
 
 As a first step, I imported my data. I then filtered it: the original data file is extremely large and includes records for all types of properties, not just residential ones. I removed non-residential properties, vacant lots, and properties owned by the New York Housing Authority or the City of New York - while these represent important housing stock, they may not follow market price/value trends in the same way as privately-owned property. I selected only the columns I was interested in, kept only the most recent 5 years, and removed some rows with missing data.
 
-I also created two columns: one that converts the original column YEAR to a standard year 
-(original format is "2018/19"; I kept the first year in the range for each); and one that includes the names of the boroughs instead of just number codes (1-5).
+I also created two columns: one that converts the original column YEAR to a standard year (original format is "2018/19"; I kept the first year in the range for each); and one that includes the names of the boroughs instead of just number codes (1-5).
+
 ```{r}
 #| output: false
 
@@ -57,12 +58,9 @@ res_data <- read_csv("/Users/madeleineadelson/IDrive Downloads/MadeleinesMacBook
 
 ## First visualization: How have property values changed over time in each borough?
 
-The chart below gives a sense of the relative market value of apartments in each borough and how those values changed from 2014-2018. I restricted this analysis to buildings classed as apartment buildings (4+ units); there seem to be some issues with comparing property values across different property types such as single-family homes.
-
-Median market values have increased in all boroughs. Values are highest - and rising fastest, in terms of dollars - in Manhattan and Brooklyn.
-
 ```{r}
-
+#| warning: false
+#| message: false
 res_data |>
   filter(TAXCLASS %in% c("2", "2A", "2B", "2C")) |>
   group_by(yearcln, boro_name) |>
@@ -80,3 +78,56 @@ res_data |>
   theme_minimal()
 
 ```
+The chart above gives a sense of the relative market value of apartments in each borough and how those values changed from 2014-2018. I restricted this analysis to buildings classed as apartment buildings (4+ units); there seem to be some issues with comparing property values across different property types such as single-family homes.
+
+Median market values have increased in all boroughs. Values are highest - and rising fastest, in terms of dollars - in Manhattan and Brooklyn. The large gap in values between these two boroughs and the others should inform choices made about how to allocate housing assistance, in conjunction with other data on the need for assistance and resident incomes across the five boroughs. The trend over time of rising values will also likely translate into rising rents, as property owners pay more taxes - the city may need to provide further supports for renters, but it will also have additional revenue in the form of property tax.
+
+As a side note, these values seem very low to me. I'm not sure why this is; it may be an artifact of how NYC calculates property values vs. what they would realistically actually sell for. However, the relationships between the boroughs in terms of values does seem reasonable to me.
+
+
+## Second visualization: What do market values look like by property type?
+
+As mentioned above, I was finding that including one to three-family homes as well as 4+ unit buildings was giving me strange results (primarily, Manhattan was showing the lowest median market values). One way to explore what is going on here is to look at market values by property type.
+
+Properties are bucketed into different categories based on the number of units they have.
+
+```{r}
+#| warning: false
+#| message: false
+
+res_data |>
+  group_by(TAXCLASS) |>
+  summarize(medvalcat = median(FULLVAL)) |>
+    mutate(bld_type = case_when(
+    TAXCLASS %in% c("1", "1A", "1B", "1C", "1D") ~ "1 to 3 units",
+    TAXCLASS %in% c(2, "2A", "2B") ~ "4 or more units",
+    TRUE ~ NA)) |>
+  filter(!is.na(bld_type)) |>
+  ggplot() +
+  geom_col(mapping = aes(y = TAXCLASS, x = medvalcat, fill = bld_type)) +
+  labs(
+    title = "Median market value by property type",
+    color = "General type"
+  ) +
+  xlab("Median market value") +
+  ylab("Property tax class") +
+  scale_x_continuous(labels = label_dollar()) +
+  theme_minimal()
+
+    
+
+```
+
+This breakdown clearly shows that the outlier is class 1D - the median property value is far above any other category. New York City defines 1D as "Large, Cooperative Properties Composed of Individually Owned Homes Upon Cooperatively Owned Land; Select Bungalow Colonies (e.g. Breezy Point)". It seems like these might be very large properties containing multiple standalone/semi-detached homes, yet still appearing in the data as a single property since they are owned by a cooperative. If this is the case, I'm not sure why NYC puts them in the "1-3 units" category.
+
+I also wonder if 1D is just a very small category, being influenced by a few outlier data points?
+
+```{r}
+res_data |>
+  filter(yearcln == 2018) |>
+  group_by(TAXCLASS) |>
+  summarize(n())
+```
+
+Indeed, there are only 29 "1D" properties in the data for 2018 (I filtered by year so as to not count properties as duplicates; properties are typically assessed every year.)
+
