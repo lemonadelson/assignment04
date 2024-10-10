@@ -50,8 +50,17 @@ res_data <- read_csv("/Users/madeleineadelson/IDrive Downloads/MadeleinesMacBook
     BORO == 2 ~ "Bronx",
     BORO == 3 ~ "Brooklyn",
     BORO == 4 ~ "Queens",
-    BORO == 5 ~ "Staten Island")
+    BORO == 5 ~ "Staten Island"),
+    bldg_cat = case_when(
+    BLDGCL %in% c("A0","A1","A2","A3","A4","A5","A6","A7","A9") ~ "Single Family",
+    BLDGCL %in% c("B1","B2","B3","B9") ~ "Two Family",
+    BLDGCL %in% c("C0","C1","C2","C3","C4","C5","C6","C8","C9","R2") ~ "Walk-Up Apartments/Condos",
+    BLDGCL %in% c("C7","D6","D7","S0","S1","S2","S3","S4","S5","S9") ~ "Mixed Use",
+    BLDGCL %in% c("D0","D1","D2","D3","D4","D5","D8","D9","R4") ~ "Elevator Apartments/Condos",
+    TRUE ~ NA
     )
+  )
+    
   
 
 ```
@@ -107,7 +116,7 @@ res_data |>
   geom_col(mapping = aes(y = TAXCLASS, x = medvalcat, fill = bld_type)) +
   labs(
     title = "Median market value by property type",
-    color = "General type"
+    fill = "General type"
   ) +
   xlab("Median market value") +
   ylab("Property tax class") +
@@ -123,6 +132,9 @@ This breakdown clearly shows that the outlier is class 1D - the median property 
 I also wonder if 1D is just a very small category, being influenced by a few outlier data points?
 
 ```{r}
+#| warning: false
+#| message: false
+
 res_data |>
   filter(yearcln == 2018) |>
   group_by(TAXCLASS) |>
@@ -130,4 +142,64 @@ res_data |>
 ```
 
 Indeed, there are only 29 "1D" properties in the data for 2018 (I filtered by year so as to not count properties as duplicates; properties are typically assessed every year.)
+
+
+## Third visualization: How has the housing type mix changed over time?
+
+Since we're just looking at a 5-year timespan, I don't expect to see large changes in the mix of housing types across different years. Still, any changes we do see might point to either a) trends in new housing construction, or b) changes in the way properties are classified for tax purposes. Both of these could be important to informing ongoing tax policy and zoning ordinances that restrict what types of housing can be built on certain plots.
+
+Here, I am using the slightly more detailed "Building Class" field (vs. "Tax Class" used above) to distinguish between types of dwellings. A dictionary of the Building Class types can be found [here](https://www.nyc.gov/assets/finance/jump/hlpbldgcode.html).
+
+First, I need to do some additional data manipulation: I create a table with the total number of properties listed that year.
+```{r}
+#| warning: false
+#| message: false
+
+yearsums <- res_data |>
+  filter(!is.na(bldg_cat)) |>
+  group_by(yearcln) |>
+  summarize(yeartot = n())
+
+```
+
+I will link this to my data to build the visualization:
+
+```{r}
+#| warning: false
+#| message: false
+
+res_data |>
+  left_join(yearsums, by = join_by(yearcln)) |>
+  group_by(bldg_cat, yearcln) |>
+  summarize(count_bldg = n(), yeartot2 = mean(yeartot)) |>
+  filter(!is.na(bldg_cat)) |>
+  mutate(pct_tot = count_bldg / yeartot2)  |>
+  ggplot() +
+  geom_area(
+    aes(
+      x = yearcln, 
+      y = pct_tot, 
+      fill = bldg_cat 
+        )
+    ) +
+  scale_fill_manual(
+        values = c("#03178C","#79BAF2","#E0435E","#817EAD","#70544F")
+  ) +
+  scale_y_continuous(labels = label_percent()) +
+  labs(
+    title = "Types of NYC residential properties",
+    subtitle = "By year, percent of total",
+    fill = "Building type"
+  ) +
+  xlab("Year") +
+  ylab("Percent of total")
+```
+
+My main takeaway here is that the housing mix did not changed very much from 2014-2018! Elevator apartments and condos seem to be slightly more prevalent than before; otherwise, this view does not show much change. We could consider a different type of visualization if we wanted to take a closer look at changes in each category. However, this visualization tells us a few important things: 
+
+1. There likely haven't been any big, sweeping changes to how properties are categorized; otherwise we'd see much more year-over year change.
+
+2. New housing may be concentrated in one category or another, but it's not making a big enough impact to any one category to change the overall mix.
+
+3. There is a lot more single- and two-family housing in NYC than I might have expected. However: it's important to note that this is a count of properties, not units; the multi-unit buildings in the "Elevator" and "Walk-Up" categories typically house many more people. Still, there are definitely land-use implications here; single-family housing takes up much more space per unit.
 
