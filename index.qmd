@@ -1,13 +1,9 @@
 ---
-title: "index"
+title: "Data Science: Assignment 04"
 author: "Madeleine Adelson"
 format: html
 embed-resources: true
 ---
-
-# Data Science: Assignment 04
-
-### Madeleine Adelson
 
 ## The data set
 
@@ -15,14 +11,23 @@ The following visualizations are created using [New York City's Property Valuati
 
 As a first step, I imported my data. I then filtered it: the original data file is extremely large and includes records for all types of properties, not just residential ones. I removed non-residential properties, vacant lots, and properties owned by the New York Housing Authority or the City of New York - while these represent important housing stock, they may not follow market price/value trends in the same way as privately-owned property. I selected only the columns I was interested in, kept only the most recent 5 years, and removed some rows with missing data.
 
-I also created two columns: one that converts the original column YEAR to a standard year (original format is "2018/19"; I kept the first year in the range for each); and one that includes the names of the boroughs instead of just number codes (1-5).
+I also created three columns:
+
+* Converted the original column YEAR to a standard year (original format is "2018/19"; I kept the first year in the range for each)
+
+* Names of the boroughs instead of just number codes (1-5)
+
+* Types of residences based on the BLDGCL (building)
 
 ```{r}
 #| output: false
+#| warning: false
+#| message: false
 
 library(tidyverse)
-library(ggplot2)
 library(scales)
+library(sf)
+library(tigris)
 
 res_data <- read_csv("/Users/madeleineadelson/IDrive Downloads/MadeleinesMacBookAir/Users/madels01/Documents/Coursework/Georgetown/2024 Fall/Data Science/assignment04/data/Property_Valuation_and_Assessment_Data.csv", lazy = TRUE) |>
   filter(TAXCLASS %in% c("1","1A","1B","1C","1D","2","2A","2B","2C"),
@@ -38,7 +43,7 @@ res_data <- read_csv("/Users/madeleineadelson/IDrive Downloads/MadeleinesMacBook
          BLDGCL != "V3",
          BLDGCL != "Z0"
          ) |>
-  select(BBLE, BORO, BLOCK, LOT, OWNER, BLDGCL, TAXCLASS, STORIES, FULLVAL, AVTOT, STADDR, POSTCODE, YEAR, Latitude, Longitude) |>
+  select(BBLE, BORO, BLOCK, LOT, OWNER, BLDGCL, TAXCLASS, STORIES, FULLVAL, AVTOT, STADDR, POSTCODE, YEAR, Longitude, Latitude) |>
   mutate(yearcln = case_when(
     YEAR == "2014/15" ~ 2014,
     YEAR == "2015/16" ~ 2015,
@@ -78,9 +83,11 @@ res_data |>
   ) |>
   ggplot() +
   geom_line(mapping = aes(x = yearcln, y = medval, color = boro_name)) +
+  geom_point(mapping = aes(x = yearcln, y = medval, color = boro_name)) +
   labs(title = "Median market value of New York City apartments",
        subtitle = "2014 through 2018, by borough",
-       color = "Borough") +
+       color = "Borough",
+       caption = "Source: Analysis of City of New York Property Valuation and Assessment Data") +
   xlab("Year") +
   ylab("Median property value") +
   scale_y_continuous(labels = label_dollar()) +
@@ -116,8 +123,10 @@ res_data |>
   geom_col(mapping = aes(y = TAXCLASS, x = medvalcat, fill = bld_type)) +
   labs(
     title = "Median market value by property type",
-    fill = "General type"
-  ) +
+    subtitle = "New York City, 2014-2018",
+    fill = "Property type",
+    caption = "Source: Analysis of City of New York Property Valuation and Assessment Data"
+    ) +
   xlab("Median market value") +
   ylab("Property tax class") +
   scale_x_continuous(labels = label_dollar()) +
@@ -143,6 +152,8 @@ res_data |>
 
 Indeed, there are only 29 "1D" properties in the data for 2018 (I filtered by year so as to not count properties as duplicates; properties are typically assessed every year.)
 
+This finding has less direct implications on policy, but more on policy analysis: if I were making real decisions for NYC, I would be sure to fully investigate why these properties are categorized the way they are, and whether adjustments are needed to ensure they are being reflected properly in my analyses.
+
 
 ## Third visualization: How has the housing type mix changed over time?
 
@@ -167,7 +178,6 @@ I will link this to my data to build the visualization:
 ```{r}
 #| warning: false
 #| message: false
-
 res_data |>
   left_join(yearsums, by = join_by(yearcln)) |>
   group_by(bldg_cat, yearcln) |>
@@ -179,27 +189,91 @@ res_data |>
     aes(
       x = yearcln, 
       y = pct_tot, 
-      fill = bldg_cat 
+      fill = bldg_cat, 
         )
     ) +
   scale_fill_manual(
-        values = c("#03178C","#79BAF2","#E0435E","#817EAD","#70544F")
+        values = c("#6a4c93","#8ac926","#ff595e","#1982c4","#ffca3a")
   ) +
-  scale_y_continuous(labels = label_percent()) +
+  scale_y_continuous(
+    labels = label_percent()
+    ) +
   labs(
     title = "Types of NYC residential properties",
     subtitle = "By year, percent of total",
-    fill = "Building type"
+    fill = "Building type",
+    caption = "Source: Analysis of City of New York Property Valuation and Assessment Data"
   ) +
   xlab("Year") +
-  ylab("Percent of total")
+  ylab("Percent of total") +
+  theme_minimal()
 ```
 
 My main takeaway here is that the housing mix did not changed very much from 2014-2018! Elevator apartments and condos seem to be slightly more prevalent than before; otherwise, this view does not show much change. We could consider a different type of visualization if we wanted to take a closer look at changes in each category. However, this visualization tells us a few important things: 
 
 1. There likely haven't been any big, sweeping changes to how properties are categorized; otherwise we'd see much more year-over year change.
 
-2. New housing may be concentrated in one category or another, but it's not making a big enough impact to any one category to change the overall mix.
+2. New housing may be concentrated in one category or another, but it's not making a big enough impact in any one category to change the overall mix.
 
 3. There is a lot more single- and two-family housing in NYC than I might have expected. However: it's important to note that this is a count of properties, not units; the multi-unit buildings in the "Elevator" and "Walk-Up" categories typically house many more people. Still, there are definitely land-use implications here; single-family housing takes up much more space per unit.
 
+## Fourth visualization: How are housing types spread across the city?
+
+I want to map the properties to get a sense of distribution across the city, with more detail than just looking borough-by-borough. Unfortunately, only a subset of my data has longitude and latitude. I am creating a new dataframe with the properties for which geospatial data are available, so as not to place all four visualizations under this constraint.
+
+```{r}
+#| warning: false
+#| message: false
+
+res_spatial <- res_data |>
+  filter(!is.na(Longitude)) |>
+  filter(!is.na(Latitude)) |>
+  filter(yearcln == 2018) |>
+  st_as_sf(coords = c("Longitude", "Latitude")) |>
+  st_set_crs(value = 4326)
+
+nyc_counties <- counties(cb = TRUE, progress_bar = FALSE, year = 2018) |>
+  filter(STATEFP == "36",
+         COUNTYFP %in% c("005","047","061","081","085")
+  )
+```
+
+Now making the map: Each dot represents a property, with different property types represented by the dot colors. Note that my subsample is also restricted to 2018 - otherwise, we'd see overlapping points for buildings that appear in multiple years of data.
+
+```{r}
+#| warning: false
+#| message: false
+
+res_spatial |>
+  filter(!is.na(bldg_cat)) |>
+  ggplot() +
+  geom_sf(data = nyc_counties) +
+  geom_sf(aes(color = bldg_cat, size = FULLVAL), alpha = 0.01) +
+  scale_color_manual(
+        values = c("#6a4c93","#8ac926","#ff595e","#1982c4","#ffca3a")
+  ) +
+  scale_size_continuous(
+    range = c(0.25, 4),
+    labels = label_dollar()
+    ) +
+  labs(
+    title = "Residential buildings by type, New York City",
+    subtitle = "2018/19 assessment cycle",
+    color = "Building type",
+    size = "Market value",
+    caption = "Source: Analysis of City of New York Property Valuation and Assessment Data"
+  ) +
+  guides(
+    color = guide_legend(override.aes = list(alpha = 1, size = 1)),
+    size = guide_legend(override.aes = list(alpha = 0.5))
+    ) +
+  theme_void()
+
+
+```
+
+The map shows us that single-family housing (pink/red) is very much concentrated in Staten Island and eastern Queens. Manhattan is dominated by elevator apartments/condos (purple), with some clusters of walk-ups (yellow) at the south and north ends of the island. Brooklyn, The Bronx, and western Queens are very heterogeneous, with all types of housing visible.
+
+I also note that Manhattan looks relatively sparse - while it does have a larger concentration of commercial buildings (and therefore probably less housing) than the other boroughs, there may also be other housing types I chose to exclude which are represented there. I chose to exclude some codes that I could not easily interpret and group into meaningful categories: for instance, "RR" properties are "Condominium Rentals", which tells me nothing about the size or number of units.
+
+The concentration of single-family housing in outer boroughs is a good starting point for policy conversations about affordability. A next step would be to overlay these findings with zoning restrictions: Do these areas have single-family homes because zoning only allows for that type of residence? If so, we could consider rezoning to increase housing density and ease pressure on existing housing stock. However, doing so would require becoming familiar with these areas, neighborhood characteristics, and resident needs, to make sure that we serve the existing community as well as the city at large.
